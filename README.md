@@ -61,6 +61,9 @@ such that concurrent workers do not block each other.
 
 ```
 
+## Documentation
+
+[API Docs] (http://layerware.github.io/pgqueue)
 
 ## License
 
