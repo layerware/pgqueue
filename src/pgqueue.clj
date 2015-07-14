@@ -34,7 +34,7 @@
   (merge (assoc default-config
            :db (:db default-config)) config))
 
-(defn db-pool
+(defn- db-pool
   [spec]
   (System/setProperties 
     (doto (java.util.Properties. (System/getProperties))
@@ -211,6 +211,10 @@
                  - true (default) deletes queue item row
                  - false sets a deleted_flag to true
                    (persists all queue items; see pgqueue/purge)
+       :default-priority - default priority for puts not specifying
+                           a priority; must be an integer
+                           where a lower value = higher priority; negative integers 
+                           are also accepted
        :serializer - instance of a type that implements
                      pgqueue.serializer.Serializer protocol
                        default is instance of pgqueue.serializer.nippy/NippySerializer
