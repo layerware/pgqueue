@@ -8,9 +8,9 @@ such that concurrent workers do not block each other.
 
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
-[![Clojars Project]
-(http://clojars.org/com.layerware/pgqueue/latest-version.svg)]
-(http://clojars.org/com.layerware/pgqueue)
+```clj
+[com.layerware/pgqueue "0.1.0"]
+```
 
 ## Usage
 
