@@ -111,7 +111,8 @@ a strategy that locks a row via update of a table column.
 See the perf project in this repository to run a performance test
 on your hardware.
 
-Here are the results on my weak laptop (i5-4200U CPU@1.60GHz×4, SSD)
+Here are the results from a Linode 2048 
+  (2GB RAM, SSD, 2 x Intel(R) Xeon(R) CPU E5-2680 v3 @ 2.50GHz)
 using the following JVM options in project.clj:
 ```
 jvm-opts ^:replace ["-Xmx1g" "-Xms1g" "-server"]
@@ -119,15 +120,18 @@ jvm-opts ^:replace ["-Xmx1g" "-Xms1g" "-server"]
 
 ```
 $ PGQUEUE_CONFIG=./perf.config.edn lein run -m pgqueue.perf
-Put      100 integers...      414ms
-Take     100 integers...      617ms
-Put     1000 integers...      774ms
-Take    1000 integers...     2196ms
-Put    10000 integers...     6269ms
-Take   10000 integers...    21074ms
+pgqueue perf test
+
+Put      100 integers...    319ms duration   0.313/ms (  313/s) avg rate
+Take     100 integers...    859ms duration   0.116/ms (  116/s) avg rate
+
+Put     1000 integers...    799ms duration   1.252/ms ( 1252/s) avg rate
+Take    1000 integers...   4104ms duration   0.244/ms (  244/s) avg rate
+
+Put    10000 integers...   5185ms duration   1.929/ms ( 1929/s) avg rate
+Take   10000 integers...  37784ms duration   0.265/ms (  265/s) avg rate
 ```
 
-We're looking at about 2ms for a take even on this weak hardware.
 
 ## License
 
