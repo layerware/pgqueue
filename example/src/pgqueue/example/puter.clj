@@ -8,12 +8,14 @@
         c (edn/read-string (slurp (io/file p)))
         q (pgq/queue :example c)]
     (loop [id 0]
-      (let [i {:id id
-               :priority (rand-int 500)
+      (let [p (rand-int 500)
+            i {:id id
+               :priority p
                :inserted (System/currentTimeMillis)}
-            r (pgq/put q i)]
-        (when r (println (str "Put: " (:id i)
-                           " w/ priority: " (:priority i)
-                           " at: " (:inserted i)))))
+            r (pgq/put q p i)]
+        (when r
+          (println (format "Put: %-7d priority: %-5d"
+                     (:id i)
+                     (:priority i)))))
       (Thread/sleep 10)     
       (recur (inc id)))))

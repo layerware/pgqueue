@@ -10,10 +10,11 @@
     (loop []
       (let [i (pgq/take q)]
         (if i
-          (println (str "Took: " (:id i)
-                     " w/ priority: " (:priority i)
-                     " ms in queue: " (- (System/currentTimeMillis) (:inserted i))))
-                                        ; if q was empty, sleep a bit before checking again
+          (println (format "Took: %-7d priority: %-5d in queue (ms): %-7d"
+                     (:id i)
+                     (:priority i)
+                     (- (System/currentTimeMillis) (:inserted i))))
+          ;; if q was empty, sleep a bit before checking again
           (do (println "empty queue")
               (Thread/sleep 100))))
       (recur))))
