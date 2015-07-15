@@ -4,13 +4,15 @@
             [clojure.tools.reader.edn :as edn]))
 
 (defn ms [milliseconds]
-  (format "%9dms" milliseconds))
+  (format "%7dms" milliseconds))
 
 (defn now-diff [start]
   (- (System/currentTimeMillis) start))
 
 (defn avg [n tm]
-  (format "%7.3f/ms" (/ (float n) tm)))
+  (format "%7.3f/ms (%5.0f/s)"
+    (/ (float n) tm)
+    (* 1000 (/ (float n) tm))))
 
 (defn print-timings [n start]
   (let [diff (now-diff start)]
