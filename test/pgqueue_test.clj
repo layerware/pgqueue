@@ -57,6 +57,20 @@
           (pgq/put q :a)
           (pgq/take-with [item q]
             (is (= :a item))))
+        (testing "delete behavior"
+          (if (= name :no-delete)
+            (do (pgq/purge-deleted q)
+                (is (= true (pgq/put q :a)))
+                (is (= 1 (pgq/count q)))
+                (is (= :a (pgq/take q)))
+                (is (= 1 (pgq/count-deleted q)))
+                (is (= 1 (pgq/purge-deleted q)))
+                (is (= 0 (pgq/count-deleted q))))
+            (do (is (= true (pgq/put q :b)))
+                (is (= 1 (pgq/count q)))
+                (is (= 0 (pgq/count-deleted q)))
+                (is (= :b (pgq/take q)))
+                (is (= 0 (pgq/count-deleted q))))))
         (testing "destroying"
           (pgq/destroy-queue! q)
           (pgq/destroy-all-queues! config))))))

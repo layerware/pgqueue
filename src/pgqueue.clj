@@ -47,7 +47,7 @@
                (.setPassword (:password spec))
                (.setMaxIdleTimeExcessConnections (* 30 60)) ; 30 min inactivity
                (.setMaxIdleTime (* 3 60 60)) ; 3 hrs inactivity
-               )]
+               (.setMaxPoolSize 32))]
     {:datasource cpds}))
 
 (defn- qt
@@ -210,7 +210,7 @@
        :delete - delete behavior upon successful take:
                  - true (default) deletes queue item row
                  - false sets a deleted_flag to true
-                   (persists all queue items; see pgqueue/purge)
+                   (persists all queue items; see pgqueue/purge-deleted)
        :default-priority - default priority for puts not specifying
                            a priority; must be an integer
                            where a lower value = higher priority; negative integers 
@@ -276,44 +276,43 @@
    use case for takers doing work and then deleting
    the item only after the work is safely completed."
   [q]
-  (locking q
-    (let [{:keys [schema table serializer]} (:config q)
-          db (:db q)
-          qtable (qt-table schema table)
-          qname  (name (:name q))
-          table-oid (table-oid db schema table)
-          qlocks (get-qlocks qname)
-          qlocks-not-in (sql-not-in "id" qlocks)
-          qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
-          rs (jdbc/query db
-               (sql-values
-                 (str
-                   "with recursive queued as ( \n"
-                   "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                   "from (select q from " qtable " as q \n"
-                   "where name = ? and deleted is false order by priority, id limit 1) as t1 \n"
-                   "union all ( \n"
-                   "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                   "from ( \n"
-                   " select ( \n"
-                   "  select q from " qtable " as q \n"
-                   "  where name = ? and deleted is false \n"
-                   qlocks-not-in-str
-                   "  and (priority, id) > (q2.priority, q2.id) \n"
-                   "  order by priority, id limit 1) as q \n"
-                   " from " qtable " as q2 where q2.id is not null \n"
-                   " limit 1) AS t1)) \n"
-                   "select id, name, priority, data, deleted \n"
-                   "from queued where locked \n"
-                   qlocks-not-in-str
-                   "limit 1") qname qname qlocks qlocks))
-          item (first rs)]
-      (when item
-        (swap! *qlocks* assoc qname (conj (get-qlocks qname) (:id item)))
-        (->PGQueueLockedItem
-          (->PGQueueItem q (:id item) (:name item) (:priority item)
-            (s/deserialize serializer (:data item)) (:deleted item))
-          (->PGQueueLock q table-oid (:id item)))))))
+  (let [{:keys [schema table serializer]} (:config q)
+        db (:db q)
+        qtable (qt-table schema table)
+        qname  (name (:name q))
+        table-oid (table-oid db schema table)
+        qlocks (get-qlocks qname)
+        qlocks-not-in (sql-not-in "id" qlocks)
+        qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
+        rs (jdbc/query db
+             (sql-values
+               (str
+                 "with recursive queued as ( \n"
+                 "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                 "from (select q from " qtable " as q \n"
+                 "where name = ? and deleted is false order by priority, id limit 1) as t1 \n"
+                 "union all ( \n"
+                 "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                 "from ( \n"
+                 " select ( \n"
+                 "  select q from " qtable " as q \n"
+                 "  where name = ? and deleted is false \n"
+                 qlocks-not-in-str
+                 "  and (priority, id) > (q2.priority, q2.id) \n"
+                 "  order by priority, id limit 1) as q \n"
+                 " from " qtable " as q2 where q2.id is not null \n"
+                 " limit 1) AS t1)) \n"
+                 "select id, name, priority, data, deleted \n"
+                 "from queued where locked \n"
+                 qlocks-not-in-str
+                 "limit 1") qname qname qlocks qlocks))
+        item (first rs)]
+    (when item
+      (swap! *qlocks* assoc qname (conj (get-qlocks qname) (:id item)))
+      (->PGQueueLockedItem
+        (->PGQueueItem q (:id item) (:name item) (:priority item)
+          (s/deserialize serializer (:data item)) (:deleted item))
+        (->PGQueueLock q table-oid (:id item))))))
 
 (defn delete
   "Delete a PGQueueItem item from queue.
@@ -425,4 +424,33 @@
            (str "select count(*) from " qtable "\n"
              "where name = ? and deleted is false \n"
              qlocks-not-in-str) qname qlocks))) 0)))
+
+(defn count-deleted
+  "Count the deleted items in queue.
+   These rows only exist when the :delete
+   behavior in pgqueue/queue's config is set
+   to false."
+  [q]
+  (let [{:keys [schema table]} (:config q)
+        qtable (qt-table schema table)
+        qname  (name (:name q))]
+    (:count
+     (first
+       (jdbc/query (:db q)
+         (sql-values
+           (str "select count(*) from " qtable "\n"
+             "where name = ? and deleted is true") qname))) 0)))
+
+(defn purge-deleted
+  "Purge deleted rows for the given queue.
+   These rows only exist when the :delete
+   behavior in pgqueue/queue's config is set
+   to false.
+   Returns number of rows deleted."
+  [q]
+  (let [{:keys [db schema table]} (:config q)
+        qname (name (:name q))]
+    (jdbc/with-db-transaction [tx (:db q)]
+      (first (jdbc/delete! tx (qt-table schema table)
+                   ["name = ? and deleted", qname])))))
 
