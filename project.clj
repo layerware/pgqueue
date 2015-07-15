@@ -1,10 +1,9 @@
-(defproject com.layerware/pgqueue "0.1.0"
+(defproject com.layerware/pgqueue "0.2.0-SNAPSHOT"
   :description "durable queue implementation using postgresql advisory locks"
   :url "https://github.com/layerware/pgqueue"
   :license {:name "Apache License, Version 2.0"
             :url "http://www.apache.org/licenses/LICENSE-2.0.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/tools.macro "0.1.2"]
                  [org.clojure/java.jdbc "0.3.7"]
                  [com.mchange/c3p0 "0.9.2.1"]
                  [org.postgresql/postgresql "9.4-1201-jdbc41"]
