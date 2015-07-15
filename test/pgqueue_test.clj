@@ -99,7 +99,7 @@
         (pgq/take-with [item q]
           (is (= :c item))
           (testing "nested take in different thread CAN NOT take same locked item"
-            (take-in-new-thread :test-concurrent c))
+            (is (not (= :c (take-in-new-thread :test-concurrent c)))))
           (testing "nested take-with in same thread CAN NOT re-take same locked item"
             (pgq/take-with [item q]
               (is (not (= :c item)))))))
