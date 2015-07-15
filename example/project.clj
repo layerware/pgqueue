@@ -2,4 +2,4 @@
   :description "pgqueue example"
   :url "https://github.com/layerware/pgqueue/example"
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [com.layerware/pgqueue "0.1.0"]])
+                 [com.layerware/pgqueue "0.2.0-SNAPSHOT"]])
