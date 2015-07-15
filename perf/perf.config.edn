@@ -1,0 +1,6 @@
+{:db {:subprotocol "postgresql"
+      :subname "//127.0.0.1:5432/pgtest"
+      :user "pgtest"
+      :password "pgtest"}
+ :schema "public"
+ :table "pgqueues_perf"}
