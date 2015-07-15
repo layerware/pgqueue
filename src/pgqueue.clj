@@ -15,11 +15,11 @@
 ;; worker threads sharing a queue can take multiple
 ;; items across a postgresql session.  Postgresql's
 ;; advisory locks handle locking for separate processes.
-(def ^:private ^:dynamic **locks** (ref {}))
+(def ^:private ^:dynamic *qlocks* (atom {}))
 
-(defn- get-locks
+(defn- get-qlocks
   [qname]
-  (get @**locks** qname))
+  (get @*qlocks* qname))
 
 (def ^:private default-config
   {:db {:classname "org.postgresql.Driver"}
@@ -156,7 +156,7 @@
         locks (jdbc/query db
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
-    (dosync (alter **locks** assoc qname []))
+    (swap! *qlocks* assoc qname [])
     (doseq [lock locks]
       (jdbc/query db
         [(str "select pg_advisory_unlock(cast(? as int),cast(q.id as int)) \n"
@@ -172,7 +172,7 @@
         locks (jdbc/query (db-pool db)
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
-    (dosync (ref-set **locks** {}))
+    (swap! *qlocks* {})
     (doseq [lock locks]
       (jdbc/query db
         ["select pg_advisory_unlock(?,?)"
@@ -282,7 +282,7 @@
           qtable (qt-table schema table)
           qname  (name (:name q))
           table-oid (table-oid db schema table)
-          qlocks (get-locks qname)
+          qlocks (get-qlocks qname)
           qlocks-not-in (sql-not-in "id" qlocks)
           qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
           rs (jdbc/query db
@@ -309,8 +309,7 @@
                    "limit 1") qname qname qlocks qlocks))
           item (first rs)]
       (when item
-        (dosync
-          (alter **locks** assoc qname (conj (get-locks qname) (:id item))))
+        (swap! *qlocks* assoc qname (conj (get-qlocks qname) (:id item)))
         (->PGQueueLockedItem
           (->PGQueueItem q (:id item) (:name item) (:priority item)
             (s/deserialize serializer (:data item)) (:deleted item))
@@ -342,9 +341,7 @@
    usage: (unlock lock)"
   [lock]
   (let [qname (name (get-in lock [:queue :name]))]
-    (dosync
-      (alter **locks** assoc qname
-        (remove #(= % (:lock-id-2 lock)) (get-locks qname))))
+    (swap! *qlocks* assoc qname  (remove #(= % (:lock-id-2 lock)) (get-qlocks qname)))
     (:unlocked
      (first (jdbc/query (get-in lock [:queue :db])
               ["select pg_advisory_unlock(cast(? as int),cast(? as int)) as unlocked"
@@ -418,7 +415,7 @@
   (let [{:keys [schema table]} (:config q)
         qtable (qt-table schema table)
         qname  (name (:name q))
-        qlocks (get-locks qname)
+        qlocks (get-qlocks qname)
         qlocks-not-in (sql-not-in "id" qlocks)
         qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
     (:count
