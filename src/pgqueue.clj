@@ -233,7 +233,11 @@
    usage: (put q item)
           (put q priority item)
 
+   Returns true on success, false on failure, nil on no-op.
+
    item can be any serializable Clojure data.
+
+   When item is nil, put is a no-op and returns nil.
    
    For arity of 2, a default priority is used.
    For arity of 3, the second argument is a priority integer
@@ -249,15 +253,16 @@
   ([q item]
    (put q (get-in q [:config :default-priority]) item))
   ([q priority item]
-   (let [{:keys [schema table serializer]} (:config q)]
-     (jdbc/with-db-transaction [tx (:db q)]
-       (try
-         (jdbc/insert! tx (qt-table schema table)
-           {:name (name (:name q))
-            :priority priority
-            :data (s/serialize serializer item)})
-         true
-         (catch java.sql.SQLException _ false))))))
+   (when (not (nil? item))
+     (let [{:keys [schema table serializer]} (:config q)]
+       (jdbc/with-db-transaction [tx (:db q)]
+         (try
+           (jdbc/insert! tx (qt-table schema table)
+             {:name (name (:name q))
+              :priority priority
+              :data (s/serialize serializer item)})
+           true
+           (catch java.sql.SQLException _ false)))))))
 
 (defn locking-take
   "Lock and take item, returning a PGQueueLockedItem.

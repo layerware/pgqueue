@@ -33,7 +33,7 @@
       (let [q (pgq/queue :test config)]
         (testing "queue"
           (is (instance? PGQueue q)))
-        (testing "simple put, take, count"
+        (testing "put, take, count"
           (is (= 0 (pgq/count q)))
           (is (= true (pgq/put q 1)))
           (is (= 1 (pgq/count q)))
@@ -43,7 +43,11 @@
           (is (= true (pgq/put q [1 2])))
           (is (= [1 2] (pgq/take q)))
           (is (= true (pgq/put q {:a 1})))
-          (is (= {:a 1} (pgq/take q))))
+          (is (= {:a 1} (pgq/take q)))
+          (testing "put nil"
+            (is (= 0 (pgq/count q)))
+            (is (= nil (pgq/put q nil)))
+            (is (= 0 (pgq/count q)))))
         (testing "priority"
           (dotimes [n 50] (pgq/put q (- 50 n) n))
           (is (= 50 (pgq/count q)))
