@@ -3,8 +3,7 @@
   (:require [clojure.string :as string]
             [clojure.java.jdbc :as jdbc]
             [pgqueue.serializer.protocol :as s]
-            [pgqueue.serializer.nippy :as nippy-serializer])
-  (:import [com.mchange.v2.c3p0 ComboPooledDataSource]))
+            [pgqueue.serializer.nippy :as nippy-serializer]))
 
 (defrecord PGQueue [name config])
 (defrecord PGQueueItem [queue id name priority data deleted])
@@ -31,7 +30,7 @@
   [qname]
   (map :lock-id (get-qlocks qname)))
 
-(def ^:private ^:dynamic db-pool-size 32)
+(def ^:private db-pool-size (* 2 (.. Runtime getRuntime availableProcessors)))
 (def ^:private ^:dynamic *db-pool* (atom (into [] (repeat db-pool-size nil))))
 
 (defn- new-db-pool-conn
@@ -71,22 +70,6 @@
   [config]
   (merge (assoc default-config
            :db (:db default-config)) config))
-
-#_(defn- db-pool
-  [spec]
-  (System/setProperties 
-    (doto (java.util.Properties. (System/getProperties))
-      (.put "com.mchange.v2.log.MLog" "com.mchange.v2.log.FallbackMLog")
-      (.put "com.mchange.v2.log.FallbackMLog.DEFAULT_CUTOFF_LEVEL" "OFF")))
-  {:datasource
-   (doto (ComboPooledDataSource.)
-     (.setDriverClass (:classname spec)) 
-     (.setJdbcUrl (str "jdbc:" (:subprotocol spec) ":" (:subname spec)))
-     (.setUser (:user spec))
-     (.setPassword (:password spec))
-     (.setMaxIdleTimeExcessConnections (* 30 60)) ; 30 min inactivity
-     (.setMaxIdleTime (* 3 60 60))                ; 3 hrs inactivity
-     (.setMaxPoolSize 8))})
 
 (defn- qt
   "Quote name for pg"
