@@ -3,6 +3,8 @@
             [clojure.java.io :as io]
             [clojure.tools.reader.edn :as edn]))
 
+(def ^:private ^:dynamic *takes* (atom 0))
+
 (def num-workers 32)
 
 (defn ms [milliseconds]
@@ -32,7 +34,7 @@
         work (repeat num-workers
                (future
                  (doall (take-while #(not (nil? %))
-                          (repeatedly #(pgq/take q))))))]
+                          (repeatedly #(do (swap! *takes* inc) (pgq/take q)))))))]
     (doall (map deref work))
     (print-timings n start)
 
@@ -49,5 +51,7 @@
     (int-run q 100)
     (int-run q 1000)
     (int-run q 10000))
+
+    (prn (str "Takes: " @*takes*))
   
   (shutdown-agents))

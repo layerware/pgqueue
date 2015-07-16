@@ -110,7 +110,7 @@
           (testing "same thread CAN NOT re-take the item"
             (is (not (= :a (pgq/take q)))))
           (is (= true (pgq/delete (:item locked-item))))
-          (is (instance? Boolean (pgq/unlock (:lock locked-item))))
+          (is (= true (pgq/unlock (:lock locked-item))))
           ))
       
       (testing "take-with"

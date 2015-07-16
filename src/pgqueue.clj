@@ -6,7 +6,7 @@
             [pgqueue.serializer.nippy :as nippy-serializer])
   (:import [com.mchange.v2.c3p0 ComboPooledDataSource]))
 
-(defrecord PGQueue [name config db])
+(defrecord PGQueue [name config])
 (defrecord PGQueueItem [queue id name priority data deleted])
 (defrecord PGQueueLock [queue lock-id-1 lock-id-2])
 (defrecord PGQueueLockedItem [item lock])
@@ -15,11 +15,49 @@
 ;; worker threads sharing a queue can take multiple
 ;; items across a postgresql session.  Postgresql's
 ;; advisory locks handle locking for separate processes.
+;; We also want to execute unlocks on the same connection
+;; a lock was made (if that connection is still open), so
+;; we store the db connection used for each lock
+
+;; Each *qlocks* entry looks like:
+;; {'qname' [{:lock-id 123 :db-id <db pool id>},...]}
 (def ^:private ^:dynamic *qlocks* (atom {}))
 
 (defn- get-qlocks
   [qname]
   (get @*qlocks* qname))
+
+(defn- get-qlocks-ids
+  [qname]
+  (map :lock-id (get-qlocks qname)))
+
+(def ^:private ^:dynamic db-pool-size 32)
+(def ^:private ^:dynamic *db-pool* (atom (into [] (repeat db-pool-size nil))))
+
+(defn- new-db-pool-conn
+  [db-spec db-pool-id]
+  (let [conn (merge db-spec
+               {:connection (jdbc/get-connection db-spec)})]
+    (swap! *db-pool* assoc db-pool-id conn)
+    conn))
+
+(defn- get-db-and-id
+  "Get random db connection and its db-pool-id from pool.
+   Returns [db-conn db-pool-id] vector."
+  ([db-spec] (get-db-and-id db-spec (rand-int db-pool-size)))
+  ([db-spec db-pool-id]
+   (let [pdb (or (get @*db-pool* db-pool-id)
+               (new-db-pool-conn db-spec db-pool-id))]
+     (try
+       (jdbc/query pdb ["select 1"])
+       (catch java.sql.SQLException e
+         [(new-db-pool-conn db-spec db-pool-id) db-pool-id]))
+     [pdb db-pool-id])))
+
+(defn- get-db
+  "Get random db connection from pool"
+  ([db-spec] (first (get-db-and-id db-spec (rand-int db-pool-size))))
+  ([db-spec db-pool-id] (first (get-db-and-id db-spec db-pool-id))))
 
 (def ^:private default-config
   {:db {:classname "org.postgresql.Driver"}
@@ -34,7 +72,7 @@
   (merge (assoc default-config
            :db (:db default-config)) config))
 
-(defn- db-pool
+#_(defn- db-pool
   [spec]
   (System/setProperties 
     (doto (java.util.Properties. (System/getProperties))
@@ -109,7 +147,7 @@
   [{:keys [db schema default-priority serializer]}]
   (when (empty? db)
     (throw (ex-info "config requires a :db key containing a clojure.java.jdbc db-spec" {})))
-  (when (not (schema-exists? db schema))
+  (when (not (schema-exists? (get-db db) schema))
     (throw (ex-info (str ":schema \"" schema "\" does not exist") {})))
   (when (not (integer? default-priority))
     (throw (ex-info ":default-priority must be an integer" {})))
@@ -119,9 +157,9 @@
 (defn- create-queue-table!
   "Create the queue table if it does not exist"
   [q]
-  (let [{:keys [schema table default-priority]} (:config q)]
-    (when (not (table-exists? (:db q) schema table))
-      (jdbc/execute! (:db q)
+  (let [{:keys [db schema table default-priority]} (:config q)]
+    (when (not (table-exists? (get-db db) schema table))
+      (jdbc/execute! (get-db db)
         [(str "create table " (qt-table schema table) " (\n"
            " id bigserial,\n"
            " name text not null,\n"
@@ -136,21 +174,21 @@
   [q]
   (let [{:keys [db schema table]} (:config q)
         qname (name (:name q))]
-    (jdbc/with-db-transaction [tx (:db q)]
+    (jdbc/with-db-transaction [tx (get-db db)]
       (> (first (jdbc/delete! tx (qt-table schema table)
                   ["name = ?", qname])) 0))))
 
 (defn- drop-queue-table!
   "Drop the queue table for the given queue's config"
   [{:keys [db schema table]}]
-  (jdbc/execute! (db-pool db)
+  (jdbc/execute! (get-db db)
     [(str "drop table if exists " (qt-table schema table))]))
 
 (defn- unlock-queue-locks!
   "Unlock all advisory locks for the queue"
   [q]
-  (let [{:keys [schema table]} (:config q)
-        db    (:db q)
+  (let [{:keys [db schema table]} (:config q)
+        db    (get-db db)
         qname (name (:name q))
         table-oid (table-oid db schema table)
         locks (jdbc/query db
@@ -168,8 +206,9 @@
 (defn- unlock-queue-table-locks!
   "Unlock all advisory locks for all queues in queue table"
   [{:keys [db schema table]}]
-  (let [table-oid (table-oid db schema table)
-        locks (jdbc/query (db-pool db)
+  (let [db (get-db db)
+        table-oid (table-oid db schema table)
+        locks (jdbc/query db
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
     (swap! *qlocks* {})
@@ -222,8 +261,7 @@
   [name config]
   (let [config (merge-with-default-config config)]
     (validate-config config)
-    (let [db (db-pool (:db config))
-          q (->PGQueue name config db)]
+    (let [q (->PGQueue name config)]
       (create-queue-table! q)
       q)))
 
@@ -254,15 +292,14 @@
    (put q (get-in q [:config :default-priority]) item))
   ([q priority item]
    (when (not (nil? item))
-     (let [{:keys [schema table serializer]} (:config q)]
-       (jdbc/with-db-transaction [tx (:db q)]
-         (try
-           (jdbc/insert! tx (qt-table schema table)
-             {:name (name (:name q))
-              :priority priority
-              :data (s/serialize serializer item)})
-           true
-           (catch java.sql.SQLException _ false)))))))
+     (let [{:keys [db schema table serializer]} (:config q)]
+       (try
+         (jdbc/insert! (get-db db) (qt-table schema table)
+           {:name (name (:name q))
+            :priority priority
+            :data (s/serialize serializer item)})
+         true
+         (catch java.sql.SQLException _ false))))))
 
 (defn locking-take
   "Lock and take item, returning a PGQueueLockedItem.
@@ -281,43 +318,45 @@
    use case for takers doing work and then deleting
    the item only after the work is safely completed."
   [q]
-  (let [{:keys [schema table serializer]} (:config q)
-        db (:db q)
+  (let [{:keys [db schema table serializer]} (:config q)
+        [db db-pool-id] (get-db-and-id db)
         qtable (qt-table schema table)
         qname  (name (:name q))
         table-oid (table-oid db schema table)
-        qlocks (get-qlocks qname)
+        qlocks (get-qlocks-ids qname)
         qlocks-not-in (sql-not-in "id" qlocks)
-        qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
-        rs (jdbc/query db
-             (sql-values
-               (str
-                 "with recursive queued as ( \n"
-                 "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                 "from (select q from " qtable " as q \n"
-                 "where name = ? and deleted is false order by priority, id limit 1) as t1 \n"
-                 "union all ( \n"
-                 "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                 "from ( \n"
-                 " select ( \n"
-                 "  select q from " qtable " as q \n"
-                 "  where name = ? and deleted is false \n"
-                 qlocks-not-in-str
-                 "  and (priority, id) > (q2.priority, q2.id) \n"
-                 "  order by priority, id limit 1) as q \n"
-                 " from " qtable " as q2 where q2.id is not null \n"
-                 " limit 1) AS t1)) \n"
-                 "select id, name, priority, data, deleted \n"
-                 "from queued where locked \n"
-                 qlocks-not-in-str
-                 "limit 1") qname qname qlocks qlocks))
-        item (first rs)]
-    (when item
-      (swap! *qlocks* assoc qname (conj (get-qlocks qname) (:id item)))
-      (->PGQueueLockedItem
-        (->PGQueueItem q (:id item) (:name item) (:priority item)
-          (s/deserialize serializer (:data item)) (:deleted item))
-        (->PGQueueLock q table-oid (:id item))))))
+        qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
+    (let [rs (jdbc/query db
+               (sql-values
+                 (str
+                   "with recursive queued as ( \n"
+                   "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                   "from (select q from " qtable " as q \n"
+                   "where name = ? and deleted is false order by priority, id limit 1) as t1 \n"
+                   "union all ( \n"
+                   "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                   "from ( \n"
+                   " select ( \n"
+                   "  select q from " qtable " as q \n"
+                   "  where name = ? and deleted is false \n"
+                   qlocks-not-in-str
+                   "  and (priority, id) > (q2.priority, q2.id) \n"
+                   "  order by priority, id limit 1) as q \n"
+                   " from " qtable " as q2 where q2.id is not null \n"
+                   " limit 1) AS t1)) \n"
+                   "select id, name, priority, data, deleted \n"
+                   "from queued where locked \n"
+                   qlocks-not-in-str
+                   "limit 1") qname qname qlocks qlocks))
+          item (first rs)]
+      (when item
+        (swap! *qlocks* assoc qname
+          (conj (get-qlocks qname) {:lock-id (:id item)
+                                    :db-id db-pool-id}))
+        (->PGQueueLockedItem
+          (->PGQueueItem q (:id item) (:name item) (:priority item)
+            (s/deserialize serializer (:data item)) (:deleted item))
+          (->PGQueueLock q table-oid (:id item)))))))
 
 (defn delete
   "Delete a PGQueueItem item from queue.
@@ -330,15 +369,14 @@
    usage: (delete item)"
   [item]
   (let [q (:queue item)
-        {:keys [schema table delete]} (:config q)
-        db (:db q)
+        {:keys [db schema table delete]} (:config q)
+        db (get-db db)
         qname  (name (:name q))
         qtable (qt-table schema table)]
-    (jdbc/with-db-transaction [tx db];
-      (if delete
-        (> (first (jdbc/delete! tx qtable ["name = ? and id = ?" qname (:id item)])) 0)
-        (> (first (jdbc/update! tx qtable {:deleted true}
-                    ["name = ? and id = ? and deleted is false" qname (:id item)])) 0)))))
+    (if delete
+      (> (first (jdbc/delete! db qtable ["name = ? and id = ?" qname (:id item)])) 0)
+      (> (first (jdbc/update! db qtable {:deleted true}
+                  ["name = ? and id = ? and deleted is false" qname (:id item)])) 0))))
 
 (defn unlock
   "Unlock a PGQueueLock.
@@ -348,10 +386,12 @@
   [lock]
   (let [qname (name (get-in lock [:queue :name]))
         lock-id-1 (:lock-id-1 lock)
-        lock-id-2 (:lock-id-2 lock)]
-    (swap! *qlocks* assoc qname  (remove #(= % lock-id-2) (get-qlocks qname)))
+        lock-id-2 (:lock-id-2 lock)
+        qlock (first (filter #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
+        qlock-db (get-db (get-in lock [:queue :config]) (:db-id qlock))]
+    (swap! *qlocks* assoc qname  (remove #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
     (:unlocked
-     (first (jdbc/query (get-in lock [:queue :db])
+     (first (jdbc/query qlock-db
               ["select pg_advisory_unlock(cast(? as int),cast(? as int)) as unlocked"
                lock-id-1 lock-id-2])))))
 
@@ -419,7 +459,7 @@
 (defn count
   "Count the items in queue."
   [q]
-  (let [{:keys [schema table]} (:config q)
+  (let [{:keys [db schema table]} (:config q)
         qtable (qt-table schema table)
         qname  (name (:name q))
         qlocks (get-qlocks qname)
@@ -427,7 +467,7 @@
         qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
     (:count
      (first
-       (jdbc/query (:db q)
+       (jdbc/query (get-db db)
          (sql-values
            (str "select count(*) from " qtable "\n"
              "where name = ? and deleted is false \n"
@@ -439,12 +479,12 @@
    behavior in pgqueue/queue's config is set
    to false."
   [q]
-  (let [{:keys [schema table]} (:config q)
+  (let [{:keys [db schema table]} (:config q)
         qtable (qt-table schema table)
         qname  (name (:name q))]
     (:count
      (first
-       (jdbc/query (:db q)
+       (jdbc/query (get-db db)
          (sql-values
            (str "select count(*) from " qtable "\n"
              "where name = ? and deleted is true") qname))) 0)))
@@ -458,7 +498,7 @@
   [q]
   (let [{:keys [db schema table]} (:config q)
         qname (name (:name q))]
-    (jdbc/with-db-transaction [tx (:db q)]
+    (jdbc/with-db-transaction [tx (get-db db)]
       (first (jdbc/delete! tx (qt-table schema table)
                ["name = ? and deleted", qname])))))
 
