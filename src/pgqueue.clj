@@ -40,15 +40,15 @@
     (doto (java.util.Properties. (System/getProperties))
       (.put "com.mchange.v2.log.MLog" "com.mchange.v2.log.FallbackMLog")
       (.put "com.mchange.v2.log.FallbackMLog.DEFAULT_CUTOFF_LEVEL" "OFF")))
-  (let [cpds (doto (ComboPooledDataSource.)
-               (.setDriverClass (:classname spec)) 
-               (.setJdbcUrl (str "jdbc:" (:subprotocol spec) ":" (:subname spec)))
-               (.setUser (:user spec))
-               (.setPassword (:password spec))
-               (.setMaxIdleTimeExcessConnections (* 30 60)) ; 30 min inactivity
-               (.setMaxIdleTime (* 3 60 60)) ; 3 hrs inactivity
-               (.setMaxPoolSize 32))]
-    {:datasource cpds}))
+  {:datasource
+   (doto (ComboPooledDataSource.)
+     (.setDriverClass (:classname spec)) 
+     (.setJdbcUrl (str "jdbc:" (:subprotocol spec) ":" (:subname spec)))
+     (.setUser (:user spec))
+     (.setPassword (:password spec))
+     (.setMaxIdleTimeExcessConnections (* 30 60)) ; 30 min inactivity
+     (.setMaxIdleTime (* 3 60 60))                ; 3 hrs inactivity
+     (.setMaxPoolSize 8))})
 
 (defn- qt
   "Quote name for pg"
@@ -346,13 +346,14 @@
 
    usage: (unlock lock)"
   [lock]
-  (let [qname (name (get-in lock [:queue :name]))]
-    (swap! *qlocks* assoc qname  (remove #(= % (:lock-id-2 lock)) (get-qlocks qname)))
+  (let [qname (name (get-in lock [:queue :name]))
+        lock-id-1 (:lock-id-1 lock)
+        lock-id-2 (:lock-id-2 lock)]
+    (swap! *qlocks* assoc qname  (remove #(= % lock-id-2) (get-qlocks qname)))
     (:unlocked
      (first (jdbc/query (get-in lock [:queue :db])
               ["select pg_advisory_unlock(cast(? as int),cast(? as int)) as unlocked"
-               (:lock-id-1 lock)
-               (:lock-id-2 lock)])))))
+               lock-id-1 lock-id-2])))))
 
 (defn delete-and-unlock
   "Delete and unlock a PGQueueLockedItem.
@@ -459,5 +460,5 @@
         qname (name (:name q))]
     (jdbc/with-db-transaction [tx (:db q)]
       (first (jdbc/delete! tx (qt-table schema table)
-                   ["name = ? and deleted", qname])))))
+               ["name = ? and deleted", qname])))))
 
