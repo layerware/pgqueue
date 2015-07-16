@@ -329,14 +329,16 @@
 
    usage: (delete item)"
   [item]
-  (let [{:keys [schema table delete]} (get-in item [:queue :config])
-        db (get-in item [:queue :db])
+  (let [q (:queue item)
+        {:keys [schema table delete]} (:config q)
+        db (:db q)
+        qname  (name (:name q))
         qtable (qt-table schema table)]
-    (jdbc/with-db-transaction [tx db]
+    (jdbc/with-db-transaction [tx db];
       (if delete
-        (> (first (jdbc/delete! tx qtable ["id = ?", (:id item)])) 0)
+        (> (first (jdbc/delete! tx qtable ["name = ? and id = ?" qname (:id item)])) 0)
         (> (first (jdbc/update! tx qtable {:deleted true}
-                    ["id = ? and deleted is false" (:id item)])))))))
+                    ["name = ? and id = ? and deleted is false" qname (:id item)])) 0)))))
 
 (defn unlock
   "Unlock a PGQueueLock.
