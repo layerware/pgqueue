@@ -3,6 +3,8 @@
             [clojure.java.io :as io]
             [clojure.tools.reader.edn :as edn]))
 
+(def num-workers 32)
+
 (defn ms [milliseconds]
   (format "%7dms" milliseconds))
 
@@ -16,26 +18,25 @@
 
 (defn print-timings [n start]
   (let [diff (now-diff start)]
-      (println (ms diff) "duration" (avg n diff) "avg rate")))
+    (println (ms diff) "duration" (avg n diff) "avg rate")))
 
 (defn int-run  [q n]
-  (let [workers 32
-        start (System/currentTimeMillis)]
-
-    (print (format "\nPut  %7d integers..." n))
+  (print (format "\nPut  %7d integers..." n))
+  (let [start (System/currentTimeMillis)]
     (doall (pmap #(pgq/put q %) (range n)))
-    (print-timings n start)
-    
+    (print-timings n start))
+  
 
-    (print (format "Take %7d integers..." n))
-    (let [work (repeat workers
-                 (future
-                   (doall (take-while #(not (nil? %))
-                            (repeatedly #(pgq/take q))))))]
-      (doall (map deref work)))
+  (print (format "Take %7d integers..." n))
+  (let [start (System/currentTimeMillis)
+        work (repeat num-workers
+               (future
+                 (doall (take-while #(not (nil? %))
+                          (repeatedly #(pgq/take q))))))]
+    (doall (map deref work))
     (print-timings n start)
 
-    ; make sure we actually took!
+    ;; make sure we actually took!
     (assert (= 0 (pgq/count q)))))
 
 (defn -main []
@@ -47,6 +48,6 @@
     (println "pgqueue perf test")
     (int-run q 100)
     (int-run q 1000)
-    (int-run q 10000)
-    )
-  (System/exit 1))
+    (int-run q 10000))
+  
+  (shutdown-agents))
