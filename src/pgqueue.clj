@@ -307,14 +307,16 @@
   ([q batch]
    (put-batch q (get-in q [:config :default-priority]) batch))
   ([q priority batch]
-   (let [{:keys [db schema table serializer]} (:config q)]
+   (let [{:keys [db schema table serializer]} (:config q)
+         batch-parts (partition-all 500 (doall batch))]
      (try
-       (apply jdbc/insert! (get-db db) (qt-table schema table)
-         (map (fn [item]
-                {:name (name (:name q))
-                 :priority priority
-                 :data (s/serialize serializer item)})
-           (remove nil? (doall batch))))
+       (doseq [batch-part batch-parts]
+         (apply jdbc/insert! (get-db db) (qt-table schema table)
+           (map (fn [item]
+                  {:name (name (:name q))
+                   :priority priority
+                   :data (s/serialize serializer item)})
+             (remove nil? batch-part))))
        true
        (catch java.sql.SQLException _ false)))))
 
@@ -391,40 +393,47 @@
         qtable (qt-table schema table)
         qname  (name (:name q))
         table-oid (table-oid db schema table)
-        qlocks (get-qlocks-ids qname)
-        qlocks-not-in (sql-not-in "id" qlocks)
-        qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
-    (let [batch (jdbc/query db
-                  (sql-values
-                    (str
-                      "with recursive queued as ( \n"
-                      "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                      "from (select q from " qtable " as q \n"
-                      "where name = ? and deleted is false order by priority, id limit ?) as t1 \n"
-                      "union all ( \n"
-                      "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
-                      "from ( \n"
-                      " select ( \n"
-                      "  select q from " qtable " as q \n"
-                      "  where name = ? and deleted is false \n"
-                      qlocks-not-in-str
-                      "  and (priority, id) > (q2.priority, q2.id) \n"
-                      "  order by priority, id limit 1) as q \n"
-                      " from " qtable " as q2 where q2.id is not null \n"
-                      " limit 1) AS t1)) \n"
-                      "select id, name, priority, data, deleted \n"
-                      "from queued where locked \n"
-                      qlocks-not-in-str
-                      "limit ?") qname n qname qlocks qlocks n))]
-      (doseq [item batch]
-        (swap! *qlocks* assoc qname
-          (conj (get-qlocks qname) {:lock-id (:id item)
-                                    :db-id db-pool-id})))
-      (map (fn [item]
-             (->PGQueueLockedItem
-               (->PGQueueItem q (:id item) (:name item) (:priority item)
-                 (s/deserialize serializer (:data item)) (:deleted item))
-               (->PGQueueLock q table-oid (:id item)))) batch))))
+        internal-batch-size 500]
+    (mapcat
+      (fn [internal-n]
+        (let [qlocks (get-qlocks-ids qname)
+              qlocks-not-in (sql-not-in "id" qlocks)
+              qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
+              batch (jdbc/query db
+                      (sql-values
+                        (str
+                          "with recursive queued as ( \n"
+                          "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                          "from (select q from " qtable " as q \n"
+                          "where name = ? and deleted is false order by priority, id) as t1 \n"
+                          "union all ( \n"
+                          "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                          "from ( \n"
+                          " select ( \n"
+                          "  select q from " qtable " as q \n"
+                          "  where name = ? and deleted is false \n"
+                          qlocks-not-in-str
+                          "  and (priority, id) > (q2.priority, q2.id) \n"
+                          "  order by priority, id limit 1) as q \n"
+                          " from " qtable " as q2 where q2.id is not null \n"
+                          " limit 1) AS t1)) \n"
+                          "select id, name, priority, data, deleted \n"
+                          "from queued where locked \n"
+                          qlocks-not-in-str
+                          "limit ?") qname qname qlocks qlocks internal-n))]
+          (doseq [item batch]
+            (swap! *qlocks* assoc qname
+              (conj (get-qlocks qname) {:lock-id (:id item)
+                                        :db-id db-pool-id})))
+          (map (fn [item]
+                 (->PGQueueLockedItem
+                   (->PGQueueItem q (:id item) (:name item) (:priority item)
+                     (s/deserialize serializer (:data item)) (:deleted item))
+                   (->PGQueueLock q table-oid (:id item)))) batch)))
+      (remove zero? (conj
+                             (clojure.core/take (quot n internal-batch-size)
+                               (repeat internal-batch-size))
+                             (mod n internal-batch-size))))))
 
 
 (defn delete

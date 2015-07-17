@@ -14,7 +14,7 @@
   (- (System/currentTimeMillis) start))
 
 (defn avg [n tm]
-  (format "%7.3f/ms (%5.0f/s)"
+  (format "%7.3f/ms (%6.0f/s)"
     (/ (float n) tm)
     (* 1000 (/ (float n) tm))))
 
