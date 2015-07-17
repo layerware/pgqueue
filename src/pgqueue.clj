@@ -392,7 +392,7 @@
         qtable (qt-table schema table)
         qname  (name (:name q))
         table-oid (table-oid db schema table)
-        internal-batch-size 500]
+        internal-batch-size 100]
     (mapcat
       (fn [internal-n]
         (let [[db db-pool-id] (get-db-and-id db)
