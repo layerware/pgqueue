@@ -30,6 +30,9 @@ such that concurrent workers do not block each other.
 (pgq/put q :a) ;=> true
 (pgq/put q :b) ;=> true
 
+;; Put nil is a no-op
+(pgq/put q nil) ;=> nil
+
 ;; How many?
 (pgq/count q) ;=> 2
 
@@ -60,7 +63,7 @@ such that concurrent workers do not block each other.
 (pgq/take q) ;=> :failme
 
 
-;; pgqueue is also priority queue
+;; pgqueue is also a priority queue
 ;; For put with arity of 2, a default priority of 100 is used.
 ;;   (see pgqueue/queue docs to set a default priority for a queue)
 ;; For put with arity of 3, the second argument is a priority integer
@@ -76,6 +79,13 @@ such that concurrent workers do not block each other.
 (pgq/take q) ;=> "medium"
 (pgq/take q) ;=> "low"
 (pgq/take q) ;=> "least"
+
+
+;; Put a batch
+(pgq/put-batch q [1 2 3]) ;=> true
+
+;; Take a batch
+(pgq/take-batch q 3) ;=> [1 2 3]
    
 ```
 
@@ -106,7 +116,7 @@ Benefits of pgqueue include:
 Obviously, a queue implementation on a relational database is going
 to perform more slowly than a dedicated queuing server.  That said,
 pgqueue's use of postgresql's advisory locks is likely faster than
-a strategy that locks a row via update of a table column.
+a strategy that locks a row for update.
 
 See the perf project in this repository to run a performance test
 on your hardware.
