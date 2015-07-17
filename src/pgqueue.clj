@@ -30,7 +30,7 @@
   [qname]
   (map :lock-id (get-qlocks qname)))
 
-(def ^:private db-pool-size (* 2 (.. Runtime getRuntime availableProcessors)))
+(def ^:private db-pool-size (+ 2 (.. Runtime getRuntime availableProcessors)))
 (def ^:private ^:dynamic *db-pool* (atom (into [] (repeat db-pool-size nil))))
 
 (defn- new-db-pool-conn
