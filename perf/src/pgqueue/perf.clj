@@ -50,7 +50,7 @@
 
     (print (format "take-batch %7d integers..." n))
     (let [start (System/currentTimeMillis)]
-      (pgq/take-batch q n)
+      (assert (= n (count (pgq/take-batch q n))))
       (print-timings n start))
 
     ;; make sure we actually took!

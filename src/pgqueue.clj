@@ -389,14 +389,14 @@
    in the PGQeueuLockedItems returned."
   [q n]
   (let [{:keys [db schema table serializer]} (:config q)
-        [db db-pool-id] (get-db-and-id db)
         qtable (qt-table schema table)
         qname  (name (:name q))
         table-oid (table-oid db schema table)
         internal-batch-size 500]
     (mapcat
       (fn [internal-n]
-        (let [qlocks (get-qlocks-ids qname)
+        (let [[db db-pool-id] (get-db-and-id db)
+              qlocks (get-qlocks-ids qname)
               qlocks-not-in (sql-not-in "id" qlocks)
               qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
               batch (jdbc/query db
@@ -430,10 +430,11 @@
                    (->PGQueueItem q (:id item) (:name item) (:priority item)
                      (s/deserialize serializer (:data item)) (:deleted item))
                    (->PGQueueLock q table-oid (:id item)))) batch)))
-      (remove zero? (conj
-                             (clojure.core/take (quot n internal-batch-size)
-                               (repeat internal-batch-size))
-                             (mod n internal-batch-size))))))
+      (remove zero?
+        (conj
+          (clojure.core/take (quot n internal-batch-size)
+            (repeat internal-batch-size))
+          (mod n internal-batch-size))))))
 
 
 (defn delete
