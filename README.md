@@ -9,7 +9,7 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.2.1"]
+[com.layerware/pgqueue "0.3.0"]
 ```
 
 ## Usage
@@ -122,14 +122,20 @@ jvm-opts ^:replace ["-Xmx1g" "-Xms1g" "-server"]
 $ PGQUEUE_CONFIG=./perf.config.edn lein run -m pgqueue.perf
 pgqueue perf test
 
-Put      100 integers...    357ms duration   0.280/ms (  280/s) avg rate
-Take     100 integers...    561ms duration   0.178/ms (  178/s) avg rate
+       put     100 integers...    270ms duration   0.370/ms (   370/s) avg rate
+      take     100 integers...    530ms duration   0.189/ms (   189/s) avg rate
+ put-batch     100 integers...     72ms duration   1.389/ms (  1389/s) avg rate
+take-batch     100 integers...    239ms duration   0.418/ms (   418/s) avg rate
 
-Put     1000 integers...    913ms duration   1.095/ms ( 1095/s) avg rate
-Take    1000 integers...   3086ms duration   0.324/ms (  324/s) avg rate
+       put    1000 integers...   1218ms duration   0.821/ms (   821/s) avg rate
+      take    1000 integers...   3024ms duration   0.331/ms (   331/s) avg rate
+ put-batch    1000 integers...    383ms duration   2.611/ms (  2611/s) avg rate
+take-batch    1000 integers...   1689ms duration   0.592/ms (   592/s) avg rate
 
-Put    10000 integers...   5265ms duration   1.899/ms ( 1899/s) avg rate
-Take   10000 integers...  31250ms duration   0.320/ms (  320/s) avg rate
+       put   10000 integers...   9539ms duration   1.048/ms (  1048/s) avg rate
+      take   10000 integers...  32109ms duration   0.311/ms (   311/s) avg rate
+ put-batch   10000 integers...   2472ms duration   4.045/ms (  4045/s) avg rate
+take-batch   10000 integers...  27301ms duration   0.366/ms (   366/s) avg rate
 ```
 
 
