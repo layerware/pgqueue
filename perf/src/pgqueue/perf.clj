@@ -62,7 +62,7 @@
         _ (pgq/destroy-all-queues! c)
         q (pgq/queue :perf c)]
 
-    (println "pgqueue perf test\n")
+    (println "pgqueue perf test")
     (int-run q 100)
     (int-run q 1000)
     (int-run q 10000)

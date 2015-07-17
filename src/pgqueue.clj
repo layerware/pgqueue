@@ -307,17 +307,16 @@
   ([q batch]
    (put-batch q (get-in q [:config :default-priority]) batch))
   ([q priority batch]
-   (when (seq batch)
-     (let [{:keys [db schema table serializer]} (:config q)]
-       (try
-         (apply jdbc/insert! (get-db db) (qt-table schema table)
-           (map (fn [item]
-                  {:name (name (:name q))
-                   :priority priority
-                   :data (s/serialize serializer item)})
-             (remove nil? batch)))
-         true
-         (catch java.sql.SQLException _ false))))))
+   (let [{:keys [db schema table serializer]} (:config q)]
+     (try
+       (apply jdbc/insert! (get-db db) (qt-table schema table)
+         (map (fn [item]
+                {:name (name (:name q))
+                 :priority priority
+                 :data (s/serialize serializer item)})
+           (remove nil? (doall batch))))
+       true
+       (catch java.sql.SQLException _ false)))))
 
 
 (defn locking-take
@@ -459,7 +458,7 @@
         lock-id-2 (:lock-id-2 lock)
         qlock (first (filter #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
         qlock-db (get-db (get-in lock [:queue :config]) (:db-id qlock))]
-    (swap! *qlocks* assoc qname  (remove #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
+    (swap! *qlocks* assoc qname  (remove #(= (:lock-id %) lock-id-2) (doall (get-qlocks qname))))
     (:unlocked
      (first (jdbc/query qlock-db
               ["select pg_advisory_unlock(cast(? as int),cast(? as int)) as unlocked"
