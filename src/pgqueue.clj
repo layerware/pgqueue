@@ -284,6 +284,42 @@
          true
          (catch java.sql.SQLException _ false))))))
 
+(defn put-batch
+  "Put batch of items onto queue.
+   
+   usage: (put q batch)
+          (put q priority batch)
+
+   Returns true on success, false on failure.
+
+   batch is a sequence items.
+   An item can be any serializable Clojure data.
+
+   When an item in the batch is nil, it is removed from
+   the batch. (put q nil) is a no-op, so put-batch does
+   likewise.
+   
+   For arity of 2, a default priority is used.
+   For arity of 3, the second argument is a priority integer
+   where a lower value = higher priority; negative integers 
+   are also accepted.  All items of the batch will have the
+   same priority."
+  ([q batch]
+   (put-batch q (get-in q [:config :default-priority]) batch))
+  ([q priority batch]
+   (when (seq batch)
+     (let [{:keys [db schema table serializer]} (:config q)]
+       (try
+         (apply jdbc/insert! (get-db db) (qt-table schema table)
+           (map (fn [item]
+                  {:name (name (:name q))
+                   :priority priority
+                   :data (s/serialize serializer item)})
+             (remove nil? batch)))
+         true
+         (catch java.sql.SQLException _ false))))))
+
+
 (defn locking-take
   "Lock and take item, returning a PGQueueLockedItem.
 
@@ -340,6 +376,57 @@
           (->PGQueueItem q (:id item) (:name item) (:priority item)
             (s/deserialize serializer (:data item)) (:deleted item))
           (->PGQueueLock q table-oid (:id item)))))))
+
+(defn locking-take-batch
+  "Lock and take a batch of up to n items from queue.
+   Returns a sequence of PGQueueLockedItem instances.
+
+   usage: (locking-take-batch q n)
+
+   It is expected that pgqueue/delete and pgqueue/unlock 
+   will later be called on each of the items and locks
+   in the PGQeueuLockedItems returned."
+  [q n]
+  (let [{:keys [db schema table serializer]} (:config q)
+        [db db-pool-id] (get-db-and-id db)
+        qtable (qt-table schema table)
+        qname  (name (:name q))
+        table-oid (table-oid db schema table)
+        qlocks (get-qlocks-ids qname)
+        qlocks-not-in (sql-not-in "id" qlocks)
+        qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
+    (let [batch (jdbc/query db
+                  (sql-values
+                    (str
+                      "with recursive queued as ( \n"
+                      "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                      "from (select q from " qtable " as q \n"
+                      "where name = ? and deleted is false order by priority, id limit ?) as t1 \n"
+                      "union all ( \n"
+                      "select (q).*, pg_try_advisory_lock(" table-oid ", cast((q).id as int)) as locked \n"
+                      "from ( \n"
+                      " select ( \n"
+                      "  select q from " qtable " as q \n"
+                      "  where name = ? and deleted is false \n"
+                      qlocks-not-in-str
+                      "  and (priority, id) > (q2.priority, q2.id) \n"
+                      "  order by priority, id limit 1) as q \n"
+                      " from " qtable " as q2 where q2.id is not null \n"
+                      " limit 1) AS t1)) \n"
+                      "select id, name, priority, data, deleted \n"
+                      "from queued where locked \n"
+                      qlocks-not-in-str
+                      "limit ?") qname n qname qlocks qlocks n))]
+      (doseq [item batch]
+        (swap! *qlocks* assoc qname
+          (conj (get-qlocks qname) {:lock-id (:id item)
+                                    :db-id db-pool-id})))
+      (map (fn [item]
+             (->PGQueueLockedItem
+               (->PGQueueItem q (:id item) (:name item) (:priority item)
+                 (s/deserialize serializer (:data item)) (:deleted item))
+               (->PGQueueLock q table-oid (:id item)))) batch))))
+
 
 (defn delete
   "Delete a PGQueueItem item from queue.
@@ -416,6 +503,23 @@
   (when-let [locked-item (locking-take q)]
     (delete-and-unlock locked-item)
     (get-in locked-item [:item :data])))
+
+(defn take-batch
+  "Take batch up to n items off queue.
+   Returns seq of items.
+
+   usage: (take-batch q n)
+
+   item in batch are retrieved from the queue with the sort order:
+    - priority (low number = high priority)
+    - inserted order"
+  [q n]
+  (let [locked-items (locking-take-batch q n)]
+    (doseq [locked-item locked-items]
+      (delete-and-unlock locked-item))
+    (map (fn [locked-item]
+           (get-in locked-item [:item :data]))
+      locked-items)))
 
 (defmacro take-with
   "Lock and take an item off queue, bind the taken item, 

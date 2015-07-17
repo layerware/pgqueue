@@ -61,6 +61,9 @@
           (pgq/put q :a)
           (pgq/take-with [item q]
             (is (= :a item))))
+        (testing "put-batch, take-batch"
+          (is (= true (pgq/put-batch q (range 4))))
+          (is (= [0 1 2 3] (pgq/take-batch q 4))))
         (testing "delete behavior"
           (if (= name :no-delete)
             (do (pgq/purge-deleted q)
