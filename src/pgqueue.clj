@@ -45,13 +45,14 @@
    Returns [db-conn db-pool-id] vector."
   ([db-spec] (get-db-and-id db-spec (rand-int db-pool-size)))
   ([db-spec db-pool-id]
-   (let [pdb (or (get @*db-pool* db-pool-id)
-               (new-db-pool-conn db-spec db-pool-id))]
+   (let [id (or db-pool-id (rand-int db-pool-size))
+         db (or (get @*db-pool* id)
+              (new-db-pool-conn db-spec id))]
      (try
-       (jdbc/query pdb ["select 1"])
+       (jdbc/query db ["select 1"])
        (catch java.sql.SQLException e
-         [(new-db-pool-conn db-spec db-pool-id) db-pool-id]))
-     [pdb db-pool-id])))
+         [(new-db-pool-conn db-spec id) id]))
+     [db id])))
 
 (defn- get-db
   "Get random db connection from pool"
@@ -467,7 +468,7 @@
         lock-id-1 (:lock-id-1 lock)
         lock-id-2 (:lock-id-2 lock)
         qlock (first (filter #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
-        qlock-db (get-db (get-in lock [:queue :config]) (:db-id qlock))]
+        qlock-db (get-db (get-in lock [:queue :config :db]) (:db-id qlock))]
     (swap! *qlocks* assoc qname  (remove #(= (:lock-id %) lock-id-2) (doall (get-qlocks qname))))
     (:unlocked
      (first (jdbc/query qlock-db
