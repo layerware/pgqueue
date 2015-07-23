@@ -24,24 +24,24 @@
 
 (defn int-run  [q n]
   (println)
-  ;; (print (format "       put %7d integers..." n))
-  ;; (let [start (System/currentTimeMillis)
-  ;;       data (partition num-workers (range n))
-  ;;       work (map (fn [data-part]
-  ;;                   (future
-  ;;                     (doall (take-while #(pgq/put q %) data-part)))) data)]
-  ;;   (doall (map deref work))
-  ;;   (print-timings n start))
+  (print (format "       put %7d integers..." n))
+  (let [start (System/currentTimeMillis)
+        data (partition num-workers (range n))
+        work (map (fn [data-part]
+                    (future
+                      (doall (take-while #(pgq/put q %) data-part)))) data)]
+    (doall (map deref work))
+    (print-timings n start))
   
 
-  ;; (print (format "      take %7d integers..." n))
-  ;; (let [start (System/currentTimeMillis)
-  ;;       work (repeat num-workers
-  ;;              (future
-  ;;                (doall (take-while #(not (nil? %))
-  ;;                         (repeatedly #(pgq/take q))))))]
-  ;;   (doall (map deref work))
-  ;;   (print-timings n start))
+  (print (format "      take %7d integers..." n))
+  (let [start (System/currentTimeMillis)
+        work (repeat num-workers
+               (future
+                 (doall (take-while #(not (nil? %))
+                          (repeatedly #(pgq/take q))))))]
+    (doall (map deref work))
+    (print-timings n start))
 
   (print (format " put-batch %7d integers..." n))
   (let [start (System/currentTimeMillis)]

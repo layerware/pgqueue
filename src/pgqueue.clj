@@ -321,8 +321,8 @@
                      :data (s/serialize serializer item)})
                (remove nil? batch-part)))))
        (when (> (clojure.core/count batch) analyze-threshold)
-         (jdbc/execute! db
-           [(str "vacuum analyze " (qt-table schema table))] :transaction? false))
+         (future (jdbc/execute! db
+                   [(str "vacuum analyze " (qt-table schema table))] :transaction? false)))
        true
        (catch java.sql.SQLException _ false)))))
 
