@@ -311,13 +311,14 @@
    (let [{:keys [db schema table serializer]} (:config q)
          batch-parts (partition-all 500 (doall batch))]
      (try
-       (doseq [batch-part batch-parts]
-         (apply jdbc/insert! (get-db db) (qt-table schema table)
-           (map (fn [item]
-                  {:name (name (:name q))
-                   :priority priority
-                   :data (s/serialize serializer item)})
-             (remove nil? batch-part))))
+       (jdbc/with-db-transaction [tx (get-db db)]
+         (doseq [batch-part batch-parts]
+           (apply jdbc/insert! tx (qt-table schema table)
+             (map (fn [item]
+                    {:name (name (:name q))
+                     :priority priority
+                     :data (s/serialize serializer item)})
+               (remove nil? batch-part)))))
        true
        (catch java.sql.SQLException _ false)))))
 
