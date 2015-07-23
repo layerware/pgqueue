@@ -309,6 +309,7 @@
    (put-batch q (get-in q [:config :default-priority]) batch))
   ([q priority batch]
    (let [{:keys [db schema table serializer]} (:config q)
+         analyze-threshold 5000
          batch-parts (partition-all 500 (doall batch))]
      (try
        (jdbc/with-db-transaction [tx (get-db db)]
@@ -319,6 +320,9 @@
                      :priority priority
                      :data (s/serialize serializer item)})
                (remove nil? batch-part)))))
+       (when (> (clojure.core/count batch) analyze-threshold)
+         (jdbc/execute! db
+           [(str "vacuum analyze " (qt-table schema table))] :transaction? false))
        true
        (catch java.sql.SQLException _ false)))))
 
@@ -395,12 +399,14 @@
         qname  (name (:name q))
         table-oid (table-oid db schema table)
         internal-batch-size 100]
+    
     (mapcat
       (fn [internal-n]
         (let [[db db-pool-id] (get-db-and-id db)
               qlocks (get-qlocks-ids qname)
               qlocks-not-in (sql-not-in "id" qlocks)
               qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
+              _     (jdbc/execute! db ["set enable_seqscan=off"])
               batch (jdbc/query db
                       (sql-values
                         (str
