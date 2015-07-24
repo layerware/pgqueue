@@ -1,4 +1,4 @@
-(defproject com.layerware/pgqueue "0.3.1"
+(defproject com.layerware/pgqueue "0.3.2"
   :description "durable queue implementation using postgresql advisory locks"
   :url "https://github.com/layerware/pgqueue"
   :license {:name "Apache License, Version 2.0"
@@ -10,7 +10,7 @@
                  [com.taoensso/nippy "2.9.0"]]
   :profiles {:dev {:plugins [[lein-auto "0.1.2"]
                              [codox "0.8.13"]]
-                   :codox {:src-dir-uri "http://github.com/layerware/pgqueue/blob/0.3.1/"
+                   :codox {:src-dir-uri "http://github.com/layerware/pgqueue/blob/0.3.2/"
                            :src-linenum-anchor-prefix "L"
                            :output-dir "../gh-pages"}
                    :global-vars {*warn-on-reflection* false

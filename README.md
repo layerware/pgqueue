@@ -9,7 +9,7 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.3.1"]
+[com.layerware/pgqueue "0.3.2"]
 ```
 
 ## Usage
@@ -129,23 +129,23 @@ jvm-opts ^:replace ["-Xmx1g" "-Xms1g" "-server"]
 ```
 
 ```
-$ PGQUEUE_CONFIG=./perf.config.edn lein run -m pgqueue.perf
+PGQUEUE_CONFIG=./perf.config.edn lein run -m pgqueue.perf
 pgqueue perf test
 
-       put     100 integers...    270ms duration   0.370/ms (   370/s) avg rate
-      take     100 integers...    530ms duration   0.189/ms (   189/s) avg rate
- put-batch     100 integers...     72ms duration   1.389/ms (  1389/s) avg rate
-take-batch     100 integers...    239ms duration   0.418/ms (   418/s) avg rate
+       put     100 integers...    483ms duration   0.207/ms (   207/s) avg rate
+      take     100 integers...    495ms duration   0.202/ms (   202/s) avg rate
+ put-batch     100 integers...     51ms duration   1.961/ms (  1961/s) avg rate
+take-batch     100 integers...    192ms duration   0.521/ms (   521/s) avg rate
 
-       put    1000 integers...   1218ms duration   0.821/ms (   821/s) avg rate
-      take    1000 integers...   3024ms duration   0.331/ms (   331/s) avg rate
- put-batch    1000 integers...    383ms duration   2.611/ms (  2611/s) avg rate
-take-batch    1000 integers...   1689ms duration   0.592/ms (   592/s) avg rate
+       put    1000 integers...   1265ms duration   0.791/ms (   791/s) avg rate
+      take    1000 integers...   3171ms duration   0.315/ms (   315/s) avg rate
+ put-batch    1000 integers...    428ms duration   2.336/ms (  2336/s) avg rate
+take-batch    1000 integers...   1779ms duration   0.562/ms (   562/s) avg rate
 
-       put   10000 integers...   9539ms duration   1.048/ms (  1048/s) avg rate
-      take   10000 integers...  32109ms duration   0.311/ms (   311/s) avg rate
- put-batch   10000 integers...   2472ms duration   4.045/ms (  4045/s) avg rate
-take-batch   10000 integers...  27301ms duration   0.366/ms (   366/s) avg rate
+       put   10000 integers...   9312ms duration   1.074/ms (  1074/s) avg rate
+      take   10000 integers...  33683ms duration   0.297/ms (   297/s) avg rate
+ put-batch   10000 integers...   2419ms duration   4.134/ms (  4134/s) avg rate
+take-batch   10000 integers...  20792ms duration   0.481/ms (   481/s) avg rate
 ```
 
 
