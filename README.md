@@ -9,7 +9,7 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.3.2"]
+[com.layerware/pgqueue "0.3.3"]
 ```
 
 ## Usage
