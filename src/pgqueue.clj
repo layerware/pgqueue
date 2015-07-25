@@ -22,6 +22,10 @@
 ;; {'qname' [{:lock-id 123 :db-id <db pool id>},...]}
 (def ^:private ^:dynamic *qlocks* (atom {}))
 
+;; If :analyze_threshold is > 0, we track put count
+;; and run a vacuum analyze when threshold is met
+(def ^:private ^:dynamic *analyze-hits* (atom 0))
+
 (defn- get-qlocks
   [qname]
   (get @*qlocks* qname))
@@ -65,6 +69,7 @@
    :table "pgqueues"
    :delete true
    :default-priority 100
+   :analyze-threshold 0
    :serializer (nippy-serializer/nippy-serializer)})
 
 (defn- merge-with-default-config
@@ -218,6 +223,23 @@
     (drop-queue-table! config)
     (unlock-queue-table-locks! config)))
 
+(defn- analyze-hit!
+  "If :analzye-threshold is active (> 0),
+   increment the *analyze-hits* counter,
+   and run a vacuum analyze on table if
+   the threshold has been reached."
+  ([q] (analyze-hit! q 1))
+  ([q n]
+   (let [{:keys [db schema table analyze-threshold]} (:config q)]
+     (when (not (= 0 analyze-threshold))
+       (if (> (+ n @*analyze-hits*) analyze-threshold)
+         (do
+           (jdbc/execute! (get-db db)
+             [(str "vacuum analyze " (qt-table schema table))]
+             :transaction? false)
+           (swap! *analyze-hits* 0))
+         (swap! *analyze-hits* inc))))))
+
 (defn queue
   "Specify a queue with a name and a config.  
    Creates the underlying queue table if it
@@ -238,6 +260,9 @@
                            a priority; must be an integer
                            where a lower value = higher priority; negative integers 
                            are also accepted
+       :analyze-threshold - run a 'vacuum analyze' on queue table when this number
+                            of put/put-batch items is hit. 0 disables this feature.
+                            default value is 0 (disabled).
        :serializer - instance of a type that implements
                      pgqueue.serializer.Serializer protocol
                        default is instance of pgqueue.serializer.nippy/NippySerializer
@@ -282,6 +307,7 @@
            {:name (name (:name q))
             :priority priority
             :data (s/serialize serializer item)})
+         (analyze-hit! q)
          true
          (catch java.sql.SQLException _ false))))))
 
@@ -320,9 +346,7 @@
                      :priority priority
                      :data (s/serialize serializer item)})
                (remove nil? batch-part)))))
-       (when (> (clojure.core/count batch) analyze-threshold)
-         (future (jdbc/execute! db
-                   [(str "vacuum analyze " (qt-table schema table))] :transaction? false)))
+       (analyze-hit! q (clojure.core/count batch))
        true
        (catch java.sql.SQLException _ false)))))
 
@@ -406,7 +430,6 @@
               qlocks (get-qlocks-ids qname)
               qlocks-not-in (sql-not-in "id" qlocks)
               qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
-              _     (jdbc/execute! db ["set enable_seqscan=off"])
               batch (jdbc/query db
                       (sql-values
                         (str

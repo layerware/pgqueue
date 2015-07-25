@@ -5,6 +5,6 @@
  :schema "public"
  :table "pgqueues_perf"
 
- ;; does not trigger a 'vacuum analyze'
- ;; when this is 0
- :analyze_threshold 0}
+ ;; this will trigger a 'vacuum analyze'
+ ;; after 5000 items are put into queue
+ :analyze_threshold 5000}
