@@ -1,5 +1,5 @@
-(defproject pgqueue-example "0.3.3-SNAPSHOT"
+(defproject pgqueue-example "0.3.4-SNAPSHOT"
   :description "pgqueue example"
   :url "https://github.com/layerware/pgqueue/example"
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [com.layerware/pgqueue "0.3.3"]])
+                 [com.layerware/pgqueue "0.3.4"]])
