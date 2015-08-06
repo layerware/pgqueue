@@ -54,9 +54,9 @@
               (new-db-pool-conn db-spec id))]
      (try
        (jdbc/query db ["select 1"])
+       [db id]
        (catch java.sql.SQLException e
-         [(new-db-pool-conn db-spec id) id]))
-     [db id])))
+         [(new-db-pool-conn db-spec id) id])))))
 
 (defn- get-db
   "Get random db connection from pool"
