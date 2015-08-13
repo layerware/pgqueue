@@ -1,9 +1,9 @@
-(ns pgqueue-test
+(ns pgqueue.core-test
   (:require [clojure.test :refer :all]
-            [pgqueue :as pgq]
+            [pgqueue.core :as pgq]
             [pgqueue.serializer.nippy :as nippy-serializer]
             [pgqueue.serializer.fressian :as fressian-serializer]);
-  (:import [pgqueue PGQueue PGQueueLockedItem]))
+  (:import [pgqueue.core PGQueue PGQueueLockedItem]))
 
 (def db-spec {:subprotocol "postgresql"
               :subname "//127.0.0.1:5432/pgtest"

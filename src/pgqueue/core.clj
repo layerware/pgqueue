@@ -1,4 +1,4 @@
-(ns pgqueue
+(ns pgqueue.core
   (:refer-clojure :exclude [take count])
   (:require [clojure.string :as string]
             [clojure.java.jdbc :as jdbc]

@@ -1,5 +1,5 @@
 (ns pgqueue.example.taker
-  (:require [pgqueue :as pgq]
+  (:require [pgqueue.core :as pgq]
             [clojure.java.io :as io]
             [clojure.tools.reader.edn :as edn]))
 
