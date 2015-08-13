@@ -1,8 +1,8 @@
-(defproject pgqueue-perf "0.3.4-SNAPSHOT"
+(defproject pgqueue-perf "0.4.0-SNAPSHOT"
   :description "pgqueue perf"
   :url "https://github.com/layerware/pgqueue/perf"
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [com.layerware/pgqueue "0.3.4"]]
+                 [com.layerware/pgqueue "0.4.0"]]
   :jvm-opts ^:replace ["-Xmx1g" "-Xms1g" "-server"]
   :global-vars {*warn-on-reflection* false
                 *assert* true})
