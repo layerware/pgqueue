@@ -9,11 +9,12 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.4.0"]
+[com.layerware/pgqueue "0.4.1"]
 ```
 
 ## Recent Changes
 
+ - 0.4.1 fix (harmless) warning about rollback w/ autocommit on
  - 0.4.0 ```pgqueue``` namespace moved to ```pgqueue.core``` per [Clojure style guidelines](https://github.com/bbatsov/clojure-style-guide#no-single-segment-namespaces)
  - 0.3.4 Fixes reconnect bug
  - 0.3.3 Added ```:analyze-threshold``` option to ```pgqueue.core/queue```
