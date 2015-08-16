@@ -376,7 +376,7 @@
         qlocks (get-qlocks-ids qname)
         qlocks-not-in (sql-not-in "id" qlocks)
         qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
-    (jdbc/execute! db ["set enable_seqscan=off"])
+    (jdbc/execute! db ["set enable_seqscan=off"] :transaction? false)
     (let [rs (jdbc/query db
                (sql-values
                  (str
@@ -431,7 +431,7 @@
               qlocks (get-qlocks-ids qname)
               qlocks-not-in (sql-not-in "id" qlocks)
               qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
-              _     (jdbc/execute! db ["set enable_seqscan=off"])
+              _     (jdbc/execute! db ["set enable_seqscan=off"] :transaction? false)
               batch (jdbc/query db
                       (sql-values
                         (str
