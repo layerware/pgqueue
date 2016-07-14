@@ -9,15 +9,24 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.4.1"]
+[com.layerware/pgqueue "0.5.0"]
 ```
 
 ## Recent Changes
 
+ - 0.5.0 is the same API as 0.4.1, but has dependency version bumps with potentially-breaking changes:
+   - `clojure.java.jdbc 0.6.x` Ensure that your app is otherwise
+     compatible with `clojure.java.jdbc 0.6.x` breaking changes. See
+     the
+     [CHANGELOG](https://github.com/clojure/java.jdbc/blob/master/CHANGES.md). 
+   - `nippy` encoding updates require that you remove/empty your
+     pgqueue queues before upgrading and re-queue these items after
+     upgrading.  If you do not need to save your current queues, you
+     can simple delete the pgqueues table for the same effect.
  - 0.4.1 fix (harmless) warning about rollback w/ autocommit on
- - 0.4.0 ```pgqueue``` namespace moved to ```pgqueue.core``` per [Clojure style guidelines](https://github.com/bbatsov/clojure-style-guide#no-single-segment-namespaces)
+ - 0.4.0 `pgqueue` namespace moved to `pgqueue.core` per [Clojure style guidelines](https://github.com/bbatsov/clojure-style-guide#no-single-segment-namespaces)
  - 0.3.4 Fixes reconnect bug
- - 0.3.3 Added ```:analyze-threshold``` option to ```pgqueue.core/queue```
+ - 0.3.3 Added `:analyze-threshold` option to `pgqueue.core/queue`
 
 ## Usage
 

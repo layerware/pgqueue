@@ -236,7 +236,7 @@
          (do
            (jdbc/execute! (get-db db)
              [(str "vacuum analyze " (qt-table schema table))]
-             :transaction? false)
+             {:transaction? false})
            (swap! *analyze-hits* 0))
          (swap! *analyze-hits* inc))))))
 
@@ -340,7 +340,7 @@
      (try
        (jdbc/with-db-transaction [tx (get-db db)]
          (doseq [batch-part batch-parts]
-           (apply jdbc/insert! tx (qt-table schema table)
+           (jdbc/insert-multi! tx (qt-table schema table)
              (map (fn [item]
                     {:name (name (:name q))
                      :priority priority
@@ -376,7 +376,7 @@
         qlocks (get-qlocks-ids qname)
         qlocks-not-in (sql-not-in "id" qlocks)
         qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))]
-    (jdbc/execute! db ["set enable_seqscan=off"] :transaction? false)
+    (jdbc/execute! db ["set enable_seqscan=off"] {:transaction? false})
     (let [rs (jdbc/query db
                (sql-values
                  (str
@@ -431,7 +431,7 @@
               qlocks (get-qlocks-ids qname)
               qlocks-not-in (sql-not-in "id" qlocks)
               qlocks-not-in-str (when qlocks-not-in (str " and " qlocks-not-in))
-              _     (jdbc/execute! db ["set enable_seqscan=off"] :transaction? false)
+              _     (jdbc/execute! db ["set enable_seqscan=off"] {:transaction? false})
               batch (jdbc/query db
                       (sql-values
                         (str
