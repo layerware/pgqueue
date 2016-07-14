@@ -9,9 +9,9 @@
                  [org.clojure/data.fressian "0.2.1"]
                  [com.taoensso/nippy "2.11.1"]]
   :profiles {:dev {:plugins [[lein-auto "0.1.2"]
-                             [codox "0.8.13"]]
-                   :codox {:src-dir-uri "http://github.com/layerware/pgqueue/blob/0.5.0/"
-                           :src-linenum-anchor-prefix "L"
-                           :output-dir "../gh-pages"}
+                             [lein-codox "0.9.5"]]
+                   :codox {:source-uri "http://github.com/layerware/pgqueue/blob/0.5.0/{filepath}#L{line}"
+                      :output-path "../gh-pages"
+                      :source-paths ["src"]}
                    :global-vars {*warn-on-reflection* false
                                  *assert* false}}})
