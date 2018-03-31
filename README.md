@@ -9,11 +9,12 @@ such that concurrent workers do not block each other.
 [Leiningen](https://github.com/technomancy/leiningen) dependency information:
 
 ```clj
-[com.layerware/pgqueue "0.5.0"]
+[com.layerware/pgqueue "0.5.1"]
 ```
 
 ## Recent Changes
 
+ - 0.5.1 dependency updates
  - 0.5.0 is the same API as 0.4.1, but has dependency version bumps with potentially-breaking changes:
    - `clojure.java.jdbc 0.6.x` Ensure that your app is otherwise
      compatible with `clojure.java.jdbc 0.6.x` breaking changes. See
@@ -167,6 +168,6 @@ take-batch   10000 integers...  20792ms duration   0.481/ms (   481/s) avg rate
 
 ## License
 
-Copyright © 2015 Layerware, Inc.
+Copyright © 2018 Layerware, Inc.
 
 Distributed under the [Apache License, Version 2.0] (http://www.apache.org/licenses/LICENSE-2.0.html)
