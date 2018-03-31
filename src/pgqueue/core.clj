@@ -80,7 +80,7 @@
 (defn- qt
   "Quote name for pg"
   [name]
-  (jdbc/quoted \" name))
+  ((jdbc/quoted \") name))
 
 (defn- sql-not-in
   "Create an sql \"not in\" clause based on the count of things.
