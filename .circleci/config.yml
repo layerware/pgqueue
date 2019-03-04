@@ -4,14 +4,15 @@ jobs:
     docker:
       - image: circleci/clojure:openjdk-11-lein-2.9.1
       - image: circleci/postgres:11.2-alpine-ram
+        environment:
+          POSTGRES_USER: pgtest
+          POSTGRES_DB: pgtest
 
     working_directory: ~/repo
 
     environment:
-      POSTGRES_USER: pgtest
-      POSTGRES_DB: pgtest
       LEIN_ROOT: "true"
-      JVM_OPTS: -Xmx3200m
+      JVM_OPTS: -Xmx256m
 
     steps:
       - checkout
