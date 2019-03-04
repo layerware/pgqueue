@@ -1,0 +1,12 @@
+version: 2
+jobs:
+  test:
+    docker:
+      - image: circleci/clojure:openjdk-11-lein-2.9.1
+      - image: circleci/postgres:11.2-alpine-ram
+        environment:
+          POSTGRES_USER: pgtest
+          POSTGRES_DB: pgtest
+    steps:
+      - checkout
+      - run: lein test
