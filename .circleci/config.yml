@@ -1,12 +1,34 @@
 version: 2
 jobs:
-  test:
+  build:
     docker:
       - image: circleci/clojure:openjdk-11-lein-2.9.1
       - image: circleci/postgres:11.2-alpine-ram
-        environment:
-          POSTGRES_USER: pgtest
-          POSTGRES_DB: pgtest
+
+    working_directory: ~/repo
+
+    environment:
+      POSTGRES_USER: pgtest
+      POSTGRES_DB: pgtest
+      LEIN_ROOT: "true"
+      JVM_OPTS: -Xmx3200m
+
     steps:
       - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "project.clj" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run: lein deps
+
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies-{{ checksum "project.clj" }}
+
+      # run tests!
       - run: lein test
