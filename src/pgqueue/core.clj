@@ -200,7 +200,7 @@
         locks (jdbc/query db
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
-    (swap! queue-locks {})
+    (reset! queue-locks {})
     (doseq [lock locks]
       (jdbc/query db
         ["select pg_advisory_unlock(?,?)"
