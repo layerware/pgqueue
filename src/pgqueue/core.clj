@@ -18,30 +18,30 @@
 ;; a lock was made (if that connection is still open), so
 ;; we store the db connection used for each lock
 
-;; Each *qlocks* entry looks like:
+;; Each queue-locks entry looks like:
 ;; {'qname' [{:lock-id 123 :db-id <db pool id>},...]}
-(def ^:private ^:dynamic *qlocks* (atom {}))
+(def ^:private queue-locks (atom {}))
 
 ;; If :analyze_threshold is > 0, we track put count
 ;; and run a vacuum analyze when threshold is met
-(def ^:private ^:dynamic *analyze-hits* (atom 0))
+(def ^:private analyze-hits (atom 0))
 
 (defn- get-qlocks
   [qname]
-  (get @*qlocks* qname))
+  (get @queue-locks qname))
 
 (defn- get-qlocks-ids
   [qname]
   (map :lock-id (get-qlocks qname)))
 
 (def ^:private db-pool-size (+ 2 (.. Runtime getRuntime availableProcessors)))
-(def ^:private ^:dynamic *db-pool* (atom (into [] (repeat db-pool-size nil))))
+(def ^:private db-pool (atom (into [] (repeat db-pool-size nil))))
 
 (defn- new-db-pool-conn
   [db-spec db-pool-id]
   (let [conn (merge db-spec
                {:connection (jdbc/get-connection db-spec)})]
-    (swap! *db-pool* assoc db-pool-id conn)
+    (swap! db-pool assoc db-pool-id conn)
     conn))
 
 (defn- get-db-and-id
@@ -50,7 +50,7 @@
   ([db-spec] (get-db-and-id db-spec (rand-int db-pool-size)))
   ([db-spec db-pool-id]
    (let [id (or db-pool-id (rand-int db-pool-size))
-         db (or (get @*db-pool* id)
+         db (or (get @db-pool id)
               (new-db-pool-conn db-spec id))]
      (try
        (jdbc/query db ["select 1"])
@@ -183,7 +183,7 @@
         locks (jdbc/query db
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
-    (swap! *qlocks* assoc qname [])
+    (swap! queue-locks assoc qname [])
     (doseq [lock locks]
       (jdbc/query db
         [(str "select pg_advisory_unlock(cast(? as int),cast(q.id as int)) \n"
@@ -200,7 +200,7 @@
         locks (jdbc/query db
                 ["select classid, objid 
                   from pg_locks where classid = ?" table-oid])]
-    (swap! *qlocks* {})
+    (swap! queue-locks {})
     (doseq [lock locks]
       (jdbc/query db
         ["select pg_advisory_unlock(?,?)"
@@ -225,20 +225,20 @@
 
 (defn- analyze-hit!
   "If :analzye-threshold is active (> 0),
-   increment the *analyze-hits* counter,
+   increment the analyze-hits counter,
    and run a vacuum analyze on table if
    the threshold has been reached."
   ([q] (analyze-hit! q 1))
   ([q n]
    (let [{:keys [db schema table analyze-threshold]} (:config q)]
      (when (not (= 0 analyze-threshold))
-       (if (> (+ n @*analyze-hits*) analyze-threshold)
+       (if (> (+ n @analyze-hits) analyze-threshold)
          (do
            (jdbc/execute! (get-db db)
              [(str "vacuum analyze " (qt-table schema table))]
              {:transaction? false})
-           (swap! *analyze-hits* 0))
-         (swap! *analyze-hits* inc))))))
+           (swap! analyze-hits 0))
+         (swap! analyze-hits inc))))))
 
 (defn queue
   "Specify a queue with a name and a config.  
@@ -401,7 +401,7 @@
                    "limit 1") qname qname qlocks qlocks))
           item (first rs)]
       (when item
-        (swap! *qlocks* assoc qname
+        (swap! queue-locks assoc qname
           (conj (get-qlocks qname) {:lock-id (:id item)
                                     :db-id db-pool-id}))
         (->PGQueueLockedItem
@@ -455,7 +455,7 @@
                           qlocks-not-in-str
                           "limit ?") qname qname qlocks qlocks internal-n))]
           (doseq [item batch]
-            (swap! *qlocks* assoc qname
+            (swap! queue-locks assoc qname
               (conj (get-qlocks qname) {:lock-id (:id item)
                                         :db-id db-pool-id})))
           (map (fn [item]
@@ -501,7 +501,7 @@
         lock-id-2 (:lock-id-2 lock)
         qlock (first (filter #(= (:lock-id %) lock-id-2) (get-qlocks qname)))
         qlock-db (get-db (get-in lock [:queue :config :db]) (:db-id qlock))]
-    (swap! *qlocks* assoc qname  (remove #(= (:lock-id %) lock-id-2) (doall (get-qlocks qname))))
+    (swap! queue-locks assoc qname  (remove #(= (:lock-id %) lock-id-2) (doall (get-qlocks qname))))
     (:unlocked
      (first (jdbc/query qlock-db
               ["select pg_advisory_unlock(cast(? as int),cast(? as int)) as unlocked"
