@@ -99,6 +99,22 @@
       (let [q (pgq/queue name config)]
         (pgq/take q)))))
 
+(deftest take-batch
+  (testing "take-batch"
+    (let [c (:basic configs)
+          q (pgq/queue :test-take-batch c)
+          item-count 5
+          user-count (* 2 item-count)]
+      (dorun
+       (map (fn [i]
+              (pgq/put q i))
+            (range item-count)))
+      (let [batch (pgq/take-batch q user-count)]
+        (is (= item-count (count batch))
+            "The batch doesn't produce more items than calls to put")
+        (is (= (range item-count) batch)
+            "The items are returned in the correct order")))))
+
 (deftest pgqueue-concurrent-tests
   (testing "concurrent takers"
     (let [c  (:basic configs)
